@@ -637,10 +637,71 @@ th {
     position: static;
   }
 
+  .topbar {
+    border-radius: 24px;
+    padding: 16px;
+    gap: 14px;
+  }
+
+  .top-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .top-actions a,
+  .btn {
+    width: 100%;
+    text-align: center;
+    justify-content: center;
+    min-height: 46px;
+  }
+
+  .customer-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .customer-nav a {
+    min-height: 56px;
+    padding: 12px;
+  }
+
   .hero-grid,
   .two-col,
   .grid-form {
     grid-template-columns: 1fr;
+  }
+
+  .hero-card,
+  .panel-card,
+  .sidebar-card {
+    padding: 20px;
+    border-radius: 22px;
+  }
+
+  .section-head h2 {
+    font-size: 1.35rem;
+  }
+
+  .table-wrap {
+    margin: 0 -6px;
+    padding: 4px;
+    border-radius: 18px;
+  }
+
+  table {
+    min-width: 640px;
+  }
+
+  th,
+  td {
+    padding: 11px 8px;
+  }
+
+  .manual-actions form > * {
+    flex: 1 1 100%;
   }
 
   .user-side {
@@ -650,17 +711,86 @@ th {
 }
 
 @media (max-width: 720px) {
+  body::before,
+  body::after {
+    display: none;
+  }
+
   .page-shell {
-    padding: 14px;
+    padding: 10px;
   }
 
   .topbar {
-    border-radius: 28px;
+    border-radius: 20px;
+    padding: 14px;
+  }
+
+  .brand {
+    font-size: 1.08rem;
+  }
+
+  .topline {
+    display: none;
   }
 
   .auth-card,
   .hero-card,
   .panel-card {
-    border-radius: 26px;
+    border-radius: 20px;
+  }
+
+  .auth-card {
+    padding: 22px;
+  }
+
+  .auth-wrap {
+    min-height: auto;
+  }
+
+  .auth-card h1,
+  .hero-card h1 {
+    font-size: clamp(1.6rem, 8vw, 2.1rem);
+    line-height: 1.05;
+  }
+
+  .nav-icon {
+    width: 30px;
+    height: 30px;
+    font-size: 0.66rem;
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  .metric-card strong {
+    font-size: 1.6rem;
+  }
+
+  .table-wrap {
+    border-radius: 14px;
+  }
+}
+
+@media (max-width: 420px) {
+  .top-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .customer-nav {
+    grid-template-columns: 1fr;
+  }
+
+  .page-shell {
+    padding: 8px;
+  }
+
+  .hero-card,
+  .panel-card,
+  .sidebar-card,
+  .auth-card {
+    padding: 16px;
   }
 }
