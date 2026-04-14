@@ -238,16 +238,27 @@ def default_avg_start(category: str | None = None, rate: float | None = None) ->
 
 def create_app() -> Flask:
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    template_dir = os.path.join(base_dir, "templates")
-    static_dir = os.path.join(base_dir, "static")
+    templates_candidate = os.path.join(base_dir, "templates")
+    static_candidate = os.path.join(base_dir, "static")
 
-    # Support both layouts:
-    # 1) standard Flask folders: templates/, static/
-    # 2) flat root files in repository root
-    if not os.path.isdir(template_dir):
-        template_dir = base_dir
-    if not os.path.isdir(static_dir):
-        static_dir = base_dir
+    required_templates = {
+        "base.html",
+        "login.html",
+        "register.html",
+        "customer_base.html",
+        "customer_overview.html",
+        "admin_base.html",
+    }
+    template_dir = base_dir
+    if os.path.isdir(templates_candidate):
+        present = {
+            name for name in required_templates
+            if os.path.isfile(os.path.join(templates_candidate, name))
+        }
+        if present == required_templates:
+            template_dir = templates_candidate
+
+    static_dir = static_candidate if os.path.isdir(static_candidate) and os.path.isfile(os.path.join(static_candidate, "style.css")) else base_dir
 
     app = Flask(
         __name__,
