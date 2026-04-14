@@ -241,15 +241,18 @@ def create_app() -> Flask:
     template_dir = os.path.join(base_dir, "templates")
     static_dir = os.path.join(base_dir, "static")
 
-    # Support both layouts:
-    # 1) standard Flask folders: templates/, static/
-    # 2) flat root files in repository root
     if not os.path.isdir(template_dir):
         template_dir = base_dir
     if not os.path.isdir(static_dir):
         static_dir = base_dir
 
-   app = Flask(__name__, template_folder=".", static_folder=".", static_url_path="/static") 
+    app = Flask(
+        __name__,
+        template_folder=template_dir,
+        static_folder=static_dir,
+        static_url_path="/static",
+    )
+
     database_url = os.environ.get("DATABASE_URL", "sqlite:///panel.db")
     if database_url.startswith("postgres://"):
         database_url = database_url.replace("postgres://", "postgresql://", 1)
