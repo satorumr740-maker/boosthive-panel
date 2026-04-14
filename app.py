@@ -237,7 +237,7 @@ def default_avg_start(category: str | None = None, rate: float | None = None) ->
 
 
 def create_app() -> Flask:
-    app = Flask(__name__)
+    app = Flask(__name__, template_folder=".", static_folder=".", static_url_path="/static")
     database_url = os.environ.get("DATABASE_URL", "sqlite:///panel.db")
     if database_url.startswith("postgres://"):
         database_url = database_url.replace("postgres://", "postgresql://", 1)
