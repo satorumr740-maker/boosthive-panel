@@ -10,7 +10,7 @@ from hashlib import sha256
 import requests
 from flask import Flask, flash, jsonify, redirect, render_template, request, session, url_for
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from werkzeug.security import check_password_hash, generate_password_hash
 
 
@@ -61,6 +61,7 @@ class Service(db.Model):
     price_inr = db.Column(db.Float, nullable=False)
     base_price_inr = db.Column(db.Float, nullable=True)
     markup_percent = db.Column(db.Float, nullable=False, default=0.0)
+    provider_service_id = db.Column(db.String(64), nullable=True)
     min_quantity = db.Column(db.Integer, nullable=False)
     max_quantity = db.Column(db.Integer, nullable=False)
     avg_start = db.Column(db.String(40), nullable=False)
@@ -236,7 +237,7 @@ def default_avg_start(category: str | None = None, rate: float | None = None) ->
 
 
 def create_app() -> Flask:
-    app = Flask(__name__, template_folder=".", static_folder=".", static_url_path="/static")
+    app = Flask(__name__)
     database_url = os.environ.get("DATABASE_URL", "sqlite:///panel.db")
     if database_url.startswith("postgres://"):
         database_url = database_url.replace("postgres://", "postgresql://", 1)
@@ -549,6 +550,8 @@ def create_app() -> Flask:
             ddl_statements.append("ALTER TABLE services ADD COLUMN base_price_inr FLOAT")
         if "markup_percent" not in existing:
             ddl_statements.append("ALTER TABLE services ADD COLUMN markup_percent FLOAT NOT NULL DEFAULT 0")
+        if "provider_service_id" not in existing:
+            ddl_statements.append("ALTER TABLE services ADD COLUMN provider_service_id VARCHAR(64)")
 
         for ddl in ddl_statements:
             db.session.execute(db.text(ddl))
@@ -733,8 +736,9 @@ def create_app() -> Flask:
         db.session.commit()
 
         if has_provider_api():
+            provider_service_code = service.provider_service_id or str(service.id)
             provider_payload = {
-                "service": service.id,
+                "service": provider_service_code,
                 "link": target_link,
                 "quantity": quantity,
             }
@@ -1272,6 +1276,8 @@ def create_app() -> Flask:
         synced = 0
         if isinstance(data, list):
             for item in data:
+                provider_id_raw = item.get("service") or item.get("id")
+                provider_service_id = str(provider_id_raw).strip() if provider_id_raw is not None else ""
                 name = str(item.get("name", "")).strip()
                 category = str(item.get("category", "Provider")).strip() or "Provider"
                 rate = float(item.get("rate", 0) or 0)
@@ -1280,7 +1286,14 @@ def create_app() -> Flask:
                 if not name:
                     continue
 
-                service = Service.query.filter_by(name=name).first()
+                service = None
+                if provider_service_id:
+                    service = Service.query.filter_by(provider_service_id=provider_service_id).first()
+                if service is None:
+                    decorated_name = decorate_service_name(name, category)
+                    service = Service.query.filter(
+                        or_(Service.name == name, Service.name == decorated_name)
+                    ).first()
                 if service is None:
                     service = Service(
                         name=decorate_service_name(name, category),
@@ -1289,6 +1302,7 @@ def create_app() -> Flask:
                         price_inr=rate,
                         base_price_inr=rate,
                         markup_percent=0.0,
+                        provider_service_id=provider_service_id or None,
                         min_quantity=min_quantity,
                         max_quantity=max_quantity,
                         avg_start=default_avg_start(category, rate),
@@ -1298,6 +1312,8 @@ def create_app() -> Flask:
                 else:
                     service.name = decorate_service_name(name, category)
                     service.category = category
+                    if provider_service_id:
+                        service.provider_service_id = provider_service_id
                     if service.description == "Imported from provider API." or service.description == default_service_description("Social"):
                         service.description = default_service_description(category)
                     preserved_markup = service.markup_percent or 0.0
