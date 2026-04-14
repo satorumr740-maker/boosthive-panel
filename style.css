@@ -617,7 +617,6 @@ th {
 }
 
 @media (max-width: 980px) {
-  .customer-shell,
   .topbar,
   .section-head,
   .list-item,
@@ -627,6 +626,15 @@ th {
   .provider-tools {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .customer-shell {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .customer-sidebar {
+    position: static;
   }
 
   .hero-grid,
