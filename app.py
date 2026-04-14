@@ -178,6 +178,14 @@ def now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def is_past(dt: datetime | None) -> bool:
+    if dt is None:
+        return True
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt <= now_utc()
+
+
 def inr_to_currency(amount_inr: float, currency: str) -> float:
     return amount_inr / DISPLAY_CURRENCIES.get(currency, 1.0)
 
@@ -859,7 +867,7 @@ def create_app() -> Flask:
     def reset_password_token(token: str):
         token_hash = sha256(token.encode("utf-8")).hexdigest()
         reset_token = PasswordResetToken.query.filter_by(token_hash=token_hash, used_at=None).first()
-        if reset_token is None or reset_token.expires_at < now_utc():
+        if reset_token is None or is_past(reset_token.expires_at):
             flash("This reset link is invalid or expired.", "error")
             return redirect(url_for("forgot_password"))
 
