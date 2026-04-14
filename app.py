@@ -249,12 +249,7 @@ def create_app() -> Flask:
     if not os.path.isdir(static_dir):
         static_dir = base_dir
 
-    app = Flask(
-        __name__,
-        template_folder=template_dir,
-        static_folder=static_dir,
-        static_url_path="/static",
-    )
+   app = Flask(__name__, template_folder=".", static_folder=".", static_url_path="/static") 
     database_url = os.environ.get("DATABASE_URL", "sqlite:///panel.db")
     if database_url.startswith("postgres://"):
         database_url = database_url.replace("postgres://", "postgresql://", 1)
