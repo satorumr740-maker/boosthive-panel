@@ -319,6 +319,11 @@ def create_app() -> Flask:
     app.config["SMTP_FROM_EMAIL"] = os.environ.get("SMTP_FROM_EMAIL", "").strip()
     db.init_app(app)
 
+    try:
+        import cloudscraper  # type: ignore
+    except Exception:
+        cloudscraper = None
+
     def get_current_user() -> User | None:
         user_id = session.get("user_id")
         if not user_id:
@@ -401,17 +406,14 @@ def create_app() -> Flask:
         if extra_payload:
             payload.update(extra_payload)
 
-        response = requests.post(
-            app.config["SMM_API_URL"],
-            data=payload,
-            headers=PROVIDER_HEADERS,
-            timeout=45,
-        )
+        response, transport = provider_post(payload)
         response.raise_for_status()
         try:
             data = response.json()
         except ValueError:
             data = {"raw": response.text}
+        if isinstance(data, dict):
+            data["_transport"] = transport
 
         safe_payload = dict(payload)
         if safe_payload.get("key"):
@@ -427,6 +429,30 @@ def create_app() -> Flask:
         )
         db.session.commit()
         return data
+
+    def provider_post(payload: dict) -> tuple[requests.Response, str]:
+        api_url = app.config["SMM_API_URL"]
+
+        response = requests.post(
+            api_url,
+            data=payload,
+            headers=PROVIDER_HEADERS,
+            timeout=45,
+        )
+        body_sample = (response.text or "")[:500].lower()
+        cloudflare_blocked = response.status_code == 403 and ("cloudflare" in body_sample or "attention required" in body_sample)
+
+        if cloudflare_blocked and cloudscraper is not None:
+            scraper = cloudscraper.create_scraper(browser={"browser": "chrome", "platform": "windows", "mobile": False})
+            response = scraper.post(
+                api_url,
+                data=payload,
+                headers=PROVIDER_HEADERS,
+                timeout=45,
+            )
+            return response, "cloudscraper"
+
+        return response, "requests"
 
     def log_provider_failure(action: str, payload: dict, error_message: str) -> None:
         safe_payload = dict(payload or {})
@@ -500,16 +526,12 @@ def create_app() -> Flask:
         for action in ("services", "balance"):
             payload = {"key": api_key, "action": action}
             try:
-                response = requests.post(
-                    api_url,
-                    data=payload,
-                    headers=PROVIDER_HEADERS,
-                    timeout=45,
-                )
+                response, transport = provider_post(payload)
                 sample = response.text[:400]
                 entry = {
                     "http_status": response.status_code,
                     "ok": response.ok,
+                    "transport": transport,
                     "body_sample": sample,
                 }
                 if response.ok:
