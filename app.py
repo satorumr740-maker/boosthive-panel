@@ -2,15 +2,21 @@ from __future__ import annotations
 
 import os
 import hmac
+import secrets
+import smtplib
 from datetime import datetime, timezone
+from datetime import timedelta
 from decimal import Decimal
+from email.message import EmailMessage
 from functools import wraps
 from hashlib import sha256
+from urllib.parse import urlparse
 
 import requests
 from flask import Flask, flash, jsonify, redirect, render_template, request, session, url_for
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import func, or_
+from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
 
 
@@ -26,6 +32,8 @@ DISPLAY_CURRENCIES = {
     "CAD": 60.90,
     "SGD": 61.50,
 }
+LOGIN_WINDOW_SECONDS = 15 * 60
+LOGIN_MAX_ATTEMPTS = 10
 
 RAZORPAY_SUPPORTED = {"INR", "USD", "EUR", "GBP", "AED", "SGD"}
 PROVIDER_HEADERS = {
@@ -154,6 +162,18 @@ class ManualTopupRequest(db.Model):
     reviewed_by_user = db.relationship(User, foreign_keys=[reviewed_by_user_id])
 
 
+class PasswordResetToken(db.Model):
+    __tablename__ = "password_reset_tokens"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    token_hash = db.Column(db.String(64), unique=True, nullable=False)
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    used_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    user = db.relationship(User, backref="password_reset_tokens")
+
+
 def now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -266,6 +286,7 @@ def create_app() -> Flask:
         static_folder=static_dir,
         static_url_path="/static",
     )
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
     database_url = os.environ.get("DATABASE_URL", "sqlite:///panel.db")
     if database_url.startswith("postgres://"):
         database_url = database_url.replace("postgres://", "postgresql://", 1)
@@ -273,13 +294,21 @@ def create_app() -> Flask:
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "change-me-for-production")
     app.config["SQLALCHEMY_DATABASE_URI"] = database_url
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    app.config["SESSION_COOKIE_SECURE"] = True
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=12)
     app.config["RAZORPAY_KEY_ID"] = os.environ.get("RAZORPAY_KEY_ID", "")
     app.config["RAZORPAY_KEY_SECRET"] = os.environ.get("RAZORPAY_KEY_SECRET", "")
     app.config["RAZORPAY_WEBHOOK_SECRET"] = os.environ.get("RAZORPAY_WEBHOOK_SECRET", "")
     app.config["BASE_URL"] = os.environ.get("BASE_URL", "http://127.0.0.1:5000")
     app.config["SMM_API_URL"] = os.environ.get("SMM_API_URL", "").strip()
     app.config["SMM_API_KEY"] = os.environ.get("SMM_API_KEY", "").strip()
-
+    app.config["SMTP_HOST"] = os.environ.get("SMTP_HOST", "smtp.gmail.com").strip()
+    app.config["SMTP_PORT"] = int(os.environ.get("SMTP_PORT", "587") or "587")
+    app.config["SMTP_USERNAME"] = os.environ.get("SMTP_USERNAME", "").strip()
+    app.config["SMTP_PASSWORD"] = os.environ.get("SMTP_PASSWORD", "").strip()
+    app.config["SMTP_FROM_EMAIL"] = os.environ.get("SMTP_FROM_EMAIL", "").strip()
     db.init_app(app)
 
     def get_current_user() -> User | None:
@@ -293,6 +322,14 @@ def create_app() -> Flask:
 
     def has_provider_api() -> bool:
         return bool(app.config["SMM_API_URL"] and app.config["SMM_API_KEY"])
+
+    def has_smtp_email() -> bool:
+        return bool(
+            app.config["SMTP_HOST"]
+            and app.config["SMTP_PORT"]
+            and app.config["SMTP_USERNAME"]
+            and app.config["SMTP_PASSWORD"]
+        )
 
     def get_manual_payment_config() -> ManualPaymentConfig:
         config = ManualPaymentConfig.query.first()
@@ -368,11 +405,15 @@ def create_app() -> Flask:
         except ValueError:
             data = {"raw": response.text}
 
+        safe_payload = dict(payload)
+        if safe_payload.get("key"):
+            safe_payload["key"] = "***"
+
         db.session.add(
             ProviderLog(
                 action=action,
                 status="success",
-                request_payload=stringify_payload(payload),
+                request_payload=stringify_payload(safe_payload),
                 response_payload=stringify_payload(data),
             )
         )
@@ -380,15 +421,43 @@ def create_app() -> Flask:
         return data
 
     def log_provider_failure(action: str, payload: dict, error_message: str) -> None:
+        safe_payload = dict(payload or {})
+        if safe_payload.get("key"):
+            safe_payload["key"] = "***"
         db.session.add(
             ProviderLog(
                 action=action,
                 status="error",
-                request_payload=stringify_payload(payload),
+                request_payload=stringify_payload(safe_payload),
                 response_payload=error_message[:4000],
             )
         )
         db.session.commit()
+
+    def send_password_reset_email(to_email: str, reset_link: str) -> bool:
+        if not has_smtp_email():
+            return False
+
+        from_email = app.config["SMTP_FROM_EMAIL"] or app.config["SMTP_USERNAME"]
+        msg = EmailMessage()
+        msg["Subject"] = "BoostHive Password Reset"
+        msg["From"] = from_email
+        msg["To"] = to_email
+        msg.set_content(
+            "We received a password reset request for your BoostHive account.\n\n"
+            f"Reset link: {reset_link}\n\n"
+            "This link expires in 30 minutes.\n"
+            "If you did not request this, you can ignore this email."
+        )
+
+        try:
+            with smtplib.SMTP(app.config["SMTP_HOST"], app.config["SMTP_PORT"], timeout=30) as server:
+                server.starttls()
+                server.login(app.config["SMTP_USERNAME"], app.config["SMTP_PASSWORD"])
+                server.send_message(msg)
+            return True
+        except Exception:
+            return False
 
     def test_provider_action(action: str) -> tuple[bool, str]:
         if not has_provider_api():
@@ -422,6 +491,65 @@ def create_app() -> Flask:
 
         return wrapped_view
 
+    failed_login_attempts: dict[str, list[datetime]] = {}
+
+    def ensure_csrf_token() -> str:
+        token = session.get("csrf_token")
+        if not token:
+            token = secrets.token_urlsafe(32)
+            session["csrf_token"] = token
+        return token
+
+    def get_supplied_csrf_token() -> str:
+        return request.form.get("csrf_token", "") or request.headers.get("X-CSRF-Token", "")
+
+    def is_csrf_token_valid() -> bool:
+        expected = session.get("csrf_token", "")
+        supplied = get_supplied_csrf_token()
+        if not expected or not supplied:
+            return False
+        return hmac.compare_digest(expected, supplied)
+
+    def is_csrf_origin_allowed() -> bool:
+        origin = request.headers.get("Origin", "").strip()
+        referer = request.headers.get("Referer", "").strip()
+        request_host = urlparse(request.host_url).netloc
+        expected_hosts = {request_host}
+        base_url = app.config.get("BASE_URL", "").strip()
+        if base_url:
+            base_host = urlparse(base_url).netloc
+            if base_host:
+                expected_hosts.add(base_host)
+
+        if origin:
+            return urlparse(origin).netloc in expected_hosts
+        if referer:
+            return urlparse(referer).netloc in expected_hosts
+        return False
+
+    @app.before_request
+    def security_before_request():
+        ensure_csrf_token()
+        if request.method == "POST":
+            # Razorpay endpoints have their own signature verification.
+            if request.endpoint in {"razorpay_webhook", "razorpay_callback"}:
+                return None
+            if not is_csrf_origin_allowed():
+                return jsonify({"ok": False, "error": "Invalid request origin"}), 403
+            supplied_token = get_supplied_csrf_token()
+            if supplied_token and not is_csrf_token_valid():
+                return jsonify({"ok": False, "error": "Invalid CSRF token"}), 403
+        return None
+
+    @app.after_request
+    def apply_security_headers(response):
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        if request.is_secure:
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        return response
+
     @app.context_processor
     def inject_globals():
         current_user = get_current_user()
@@ -434,6 +562,7 @@ def create_app() -> Flask:
             "provider_api_enabled": has_provider_api(),
             "format_money": lambda amount, currency=preferred_currency: f"{currency} {amount:,.2f}",
             "convert_inr": inr_to_currency,
+            "csrf_token": ensure_csrf_token(),
         }
 
     def seed_database() -> None:
@@ -498,7 +627,8 @@ def create_app() -> Flask:
             if os.environ.get("ADMIN_PASSWORD"):
                 admin_user.password_hash = generate_password_hash(configured_admin_password)
 
-        if not User.query.filter_by(username="demo").first():
+        allow_demo_account = (os.environ.get("ALLOW_DEMO_ACCOUNT", "").strip().lower() in {"1", "true", "yes"})
+        if allow_demo_account and not User.query.filter_by(username="demo").first():
             db.session.add(
                 User(
                     username="demo",
@@ -660,13 +790,25 @@ def create_app() -> Flask:
         if request.method == "POST":
             username = request.form["username"].strip().lower()
             password = request.form["password"]
+            ip_address = request.headers.get("X-Forwarded-For", request.remote_addr or "unknown").split(",")[0].strip()
+            now = now_utc()
+            recent_attempts = failed_login_attempts.get(ip_address, [])
+            recent_attempts = [ts for ts in recent_attempts if (now - ts).total_seconds() < LOGIN_WINDOW_SECONDS]
+            if len(recent_attempts) >= LOGIN_MAX_ATTEMPTS:
+                failed_login_attempts[ip_address] = recent_attempts
+                flash("Too many login attempts. Try again after 15 minutes.", "error")
+                return render_template("login.html"), 429
+
             user = User.query.filter_by(username=username).first()
 
             if user is None or not check_password_hash(user.password_hash, password):
+                recent_attempts.append(now)
+                failed_login_attempts[ip_address] = recent_attempts
                 flash("Invalid username or password.", "error")
             elif not user.is_active:
                 flash("Your account is disabled. Contact admin support.", "error")
             else:
+                failed_login_attempts.pop(ip_address, None)
                 session.clear()
                 session["user_id"] = user.id
                 user.last_login_at = now_utc()
@@ -675,6 +817,73 @@ def create_app() -> Flask:
                 return redirect(url_for("customer_overview"))
 
         return render_template("login.html")
+
+    @app.route("/forgot-password", methods=["GET", "POST"])
+    def forgot_password():
+        if request.method == "POST":
+            email = request.form.get("email", "").strip().lower()
+            if not email:
+                flash("Email is required.", "error")
+                return render_template("forgot_password.html")
+
+            user = User.query.filter_by(email=email).first()
+            if user and user.is_active:
+                raw_token = secrets.token_urlsafe(32)
+                token_hash = sha256(raw_token.encode("utf-8")).hexdigest()
+                expires_at = now_utc() + timedelta(minutes=30)
+
+                active_tokens = PasswordResetToken.query.filter_by(user_id=user.id, used_at=None).all()
+                for token in active_tokens:
+                    token.used_at = now_utc()
+
+                db.session.add(
+                    PasswordResetToken(
+                        user_id=user.id,
+                        token_hash=token_hash,
+                        expires_at=expires_at,
+                        used_at=None,
+                    )
+                )
+                db.session.commit()
+
+                base_url = app.config["BASE_URL"].rstrip("/") or request.host_url.rstrip("/")
+                reset_link = f"{base_url}{url_for('reset_password_token', token=raw_token)}"
+                send_password_reset_email(user.email, reset_link)
+
+            flash("If this email exists in our system, a reset link has been sent.", "success")
+            return redirect(url_for("login"))
+
+        return render_template("forgot_password.html")
+
+    @app.route("/reset-password/<string:token>", methods=["GET", "POST"])
+    def reset_password_token(token: str):
+        token_hash = sha256(token.encode("utf-8")).hexdigest()
+        reset_token = PasswordResetToken.query.filter_by(token_hash=token_hash, used_at=None).first()
+        if reset_token is None or reset_token.expires_at < now_utc():
+            flash("This reset link is invalid or expired.", "error")
+            return redirect(url_for("forgot_password"))
+
+        if request.method == "POST":
+            new_password = request.form.get("new_password", "")
+            confirm_password = request.form.get("confirm_password", "")
+
+            if not new_password or not confirm_password:
+                flash("All fields are required.", "error")
+                return render_template("reset_password.html")
+            if new_password != confirm_password:
+                flash("New password and confirm password must match.", "error")
+                return render_template("reset_password.html")
+            if len(new_password) < 8:
+                flash("Password must be at least 8 characters long.", "error")
+                return render_template("reset_password.html")
+
+            reset_token.user.password_hash = generate_password_hash(new_password)
+            reset_token.used_at = now_utc()
+            db.session.commit()
+            flash("Password reset successful. Please login.", "success")
+            return redirect(url_for("login"))
+
+        return render_template("reset_password.html")
 
     @app.route("/logout")
     def logout():
@@ -817,30 +1026,7 @@ def create_app() -> Flask:
     @app.route("/wallet/add/manual", methods=["POST"])
     @login_required
     def add_funds_manual():
-        user = get_current_user()
-        amount = float(request.form["amount"])
-        currency = request.form["currency"]
-        payment_method = request.form["payment_method"]
-        reference_note = request.form["reference_note"].strip() or "Manual top-up request"
-
-        if amount <= 0 or currency not in DISPLAY_CURRENCIES:
-            flash("Enter a valid amount and currency.", "error")
-            return redirect(url_for("customer_funds"))
-
-        amount_inr = currency_to_inr(amount, currency)
-        user.wallet_inr += amount_inr
-        db.session.add(
-            WalletTransaction(
-                user_id=user.id,
-                amount_inr=amount_inr,
-                original_amount=amount,
-                original_currency=currency,
-                payment_method=payment_method,
-                reference_note=reference_note,
-            )
-        )
-        db.session.commit()
-        flash("Manual wallet credit added for testing.", "success")
+        flash("Direct wallet credit is disabled. Submit manual request for admin approval.", "error")
         return redirect(url_for("customer_funds"))
 
     @app.route("/wallet/request/manual", methods=["POST"])

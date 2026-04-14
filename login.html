@@ -3,10 +3,11 @@
 {% block content %}
 <main class="auth-wrap">
   <section class="auth-card">
-      <div>
-  <span class="eyebrow">Login</span>
-  <h1>Power your social media growth.</h1>
-</div>
+    <div>
+      <span class="eyebrow">Login</span>
+      <h1>Power your social media growth.</h1>
+      <p class="muted">Demo user: <strong>demo</strong> / <strong>demo123</strong><br>Admin user: <strong>admin</strong> / <strong>admin123</strong></p>
+    </div>
     <form method="post" class="auth-form">
       <label>Username
         <input type="text" name="username" required>
@@ -16,6 +17,7 @@
       </label>
       <button type="submit" class="btn btn-primary">Enter Panel</button>
     </form>
+    <p class="muted"><a href="{{ url_for('forgot_password') }}">Forgot password?</a></p>
     <p class="muted">Need an account? <a href="{{ url_for('register') }}">Register here</a></p>
   </section>
 </main>

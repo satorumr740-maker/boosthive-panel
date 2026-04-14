@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="{{ csrf_token }}">
   <title>{% block title %}BoostHive Panel{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
@@ -36,5 +37,22 @@
 
     {% block content %}{% endblock %}
   </div>
+  <script>
+    (function () {
+      const tokenMeta = document.querySelector('meta[name="csrf-token"]');
+      if (!tokenMeta) return;
+      const token = tokenMeta.getAttribute("content");
+      if (!token) return;
+      const forms = document.querySelectorAll("form[method='post'], form[method='POST']");
+      forms.forEach((form) => {
+        if (form.querySelector('input[name="csrf_token"]')) return;
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = "csrf_token";
+        input.value = token;
+        form.appendChild(input);
+      });
+    })();
+  </script>
 </body>
 </html>
