@@ -1,0 +1,133 @@
+{% extends "admin_base.html" %}
+{% block title %}Admin Services | BoostHive{% endblock %}
+{% block admin_content %}
+<section class="section-grid">
+  <article class="panel-card">
+    <div class="section-head">
+      <div>
+        <span class="eyebrow">Services</span>
+        <h2>Create Service</h2>
+        <p class="muted">Add new orderable services and publish them to the user dashboard.</p>
+      </div>
+    </div>
+    <form method="post" action="{{ url_for('create_service') }}" class="grid-form">
+      <label>Name
+        <input type="text" name="name" required>
+      </label>
+      <label>Category
+        <input type="text" name="category" required>
+      </label>
+      <label class="wide-label">Description
+        <textarea name="description" required></textarea>
+      </label>
+      <label>Price in INR per 1k
+        <input type="number" step="0.01" name="price_inr" required>
+      </label>
+      <label>Average Start
+        <input type="text" name="avg_start" placeholder="10 min" required>
+      </label>
+      <label>Min Quantity
+        <input type="number" name="min_quantity" required>
+      </label>
+      <label>Max Quantity
+        <input type="number" name="max_quantity" required>
+      </label>
+      <button type="submit" class="btn btn-primary">Create Service</button>
+    </form>
+  </article>
+
+  <article class="panel-card">
+    <div class="section-head">
+      <div>
+        <h2>Global Markup</h2>
+        <p class="muted">Apply profit percentage across all services using their base provider rate.</p>
+      </div>
+    </div>
+    <form method="post" action="{{ url_for('apply_global_markup') }}" class="grid-form single">
+      <label>Markup Percent
+        <input type="number" step="0.01" name="markup_percent" value="20">
+      </label>
+      <button type="submit" class="btn btn-primary">Apply Global Markup</button>
+    </form>
+  </article>
+</section>
+
+<section class="panel-card">
+  <div class="section-head">
+    <div>
+      <h2>Service List</h2>
+      <p class="muted">Edit prices, base rates, markup, limits, labels, and status for existing services. Total: {{ service_total_count }}</p>
+    </div>
+  </div>
+  <form method="get" action="{{ url_for('admin_services') }}" class="grid-form">
+    <label>Search by Name
+      <input type="text" name="search" value="{{ service_search }}" placeholder="Search service name">
+    </label>
+    <label>Category Filter
+      <select name="category">
+        <option value="">All Categories</option>
+        {% for item in service_categories %}
+          <option value="{{ item }}" {% if item == service_category_filter %}selected{% endif %}>{{ item }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit" class="btn">Apply Filters</button>
+  </form>
+  <div class="admin-service-stack">
+    {% for service in services %}
+      <div class="panel-card service-editor">
+        <div class="section-head">
+          <div>
+            <h2 style="font-size:1.1rem;">{{ service["name"] }}</h2>
+            <p class="muted">{{ service["category"] }} | {{ "Active" if service["is_active"] else "Disabled" }}</p>
+          </div>
+          <form method="post" action="{{ url_for('toggle_service', service_id=service['id']) }}">
+            <button type="submit" class="btn">{{ "Disable" if service["is_active"] else "Enable" }}</button>
+          </form>
+        </div>
+        <form method="post" action="{{ url_for('update_service', service_id=service['id']) }}" class="grid-form">
+          <label>Name
+            <input type="text" name="name" value="{{ service['name'] }}" required>
+          </label>
+          <label>Category
+            <input type="text" name="category" value="{{ service['category'] }}" required>
+          </label>
+          <label class="wide-label">Description
+            <textarea name="description" required>{{ service["description"] }}</textarea>
+          </label>
+          <label>Base Price in INR per 1k
+            <input type="number" step="0.0001" name="base_price_inr" value="{{ service['base_price_inr'] if service['base_price_inr'] is not none else service['price_inr'] }}" required>
+          </label>
+          <label>Markup Percent
+            <input type="number" step="0.01" name="markup_percent" value="{{ service['markup_percent'] or 0 }}">
+          </label>
+          <label>Selling Price in INR per 1k
+            <input type="number" step="0.0001" name="price_inr" value="{{ service['price_inr'] }}" required>
+          </label>
+          <label>Average Start
+            <input type="text" name="avg_start" value="{{ service['avg_start'] }}" required>
+          </label>
+          <label>Min Quantity
+            <input type="number" name="min_quantity" value="{{ service['min_quantity'] }}" required>
+          </label>
+          <label>Max Quantity
+            <input type="number" name="max_quantity" value="{{ service['max_quantity'] }}" required>
+          </label>
+          <button type="submit" class="btn btn-primary">Save Changes</button>
+        </form>
+      </div>
+    {% else %}
+      <div class="note-box">No services match the current filters.</div>
+    {% endfor %}
+  </div>
+  <div class="pagination-bar">
+    {% if service_page > 1 %}
+      <a class="btn" href="{{ url_for('admin_services', search=service_search, category=service_category_filter, page=service_page - 1) }}">Previous</a>
+    {% endif %}
+    <span class="muted">Page {{ service_page }} of {{ service_total_pages }}</span>
+    {% if service_page < service_total_pages %}
+      <a class="btn" href="{{ url_for('admin_services', search=service_search, category=service_category_filter, page=service_page + 1) }}">Next</a>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

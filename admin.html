@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+{% block title %}Admin | BoostHive{% endblock %}
+{% block content %}
+<main class="dashboard-page">
+  <section class="hero-card">
+    <div>
+      <span class="eyebrow">Admin Console</span>
+      <h1>Control the whole vibe from one place.</h1>
+      <p class="muted wide">Revenue, users, provider sync, and service control stay here so the front side stays simple and high-converting.</p>
+    </div>
+    <div class="hero-grid">
+      <article class="metric-card">
+        <small>Today's Revenue</small>
+        <strong>INR {{ "%.2f"|format(revenue_today) }}</strong>
+      </article>
+      <article class="metric-card">
+        <small>Total Revenue</small>
+        <strong>INR {{ "%.2f"|format(total_revenue) }}</strong>
+      </article>
+      <article class="metric-card">
+        <small>Pending Orders</small>
+        <strong>{{ pending_orders }}</strong>
+      </article>
+      <article class="metric-card">
+        <small>Provider API</small>
+        <strong>{{ "Connected" if provider_api_enabled else "Not Set" }}</strong>
+      </article>
+    </div>
+  </section>
+
+  <section class="panel-card">
+    <div class="section-head">
+      <div>
+        <h2>Provider API</h2>
+        <p class="muted">Use this for SMM provider balance checks, service sync, and automatic order forwarding when keys are configured.</p>
+      </div>
+    </div>
+    <div class="provider-tools">
+      <div class="note-box">
+        Status: <strong>{{ "Configured" if provider_api_enabled else "Missing API URL or key" }}</strong><br>
+        Balance:
+        <strong>
+          {% if provider_balance %}
+            {{ provider_balance.balance if provider_balance.balance is defined else provider_balance.raw if provider_balance.raw is defined else provider_balance }}
+          {% else %}
+            -
+          {% endif %}
+        </strong>
+      </div>
+      <form method="post" action="{{ url_for('sync_provider_services') }}">
+        <button type="submit" class="btn btn-primary">Sync Provider Services</button>
+      </form>
+    </div>
+  </section>
+
+  <section class="two-col">
+    <article class="panel-card">
+      <div class="section-head">
+        <div>
+          <h2>Create Service</h2>
+          <p class="muted">Add new orderable services and publish them to the user dashboard.</p>
+        </div>
+      </div>
+      <form method="post" action="{{ url_for('create_service') }}" class="grid-form">
+        <label>Name
+          <input type="text" name="name" required>
+        </label>
+        <label>Category
+          <input type="text" name="category" required>
+        </label>
+        <label class="wide-label">Description
+          <textarea name="description" required></textarea>
+        </label>
+        <label>Price in INR per 1k
+          <input type="number" step="0.01" name="price_inr" required>
+        </label>
+        <label>Average Start
+          <input type="text" name="avg_start" placeholder="10 min" required>
+        </label>
+        <label>Min Quantity
+          <input type="number" name="min_quantity" required>
+        </label>
+        <label>Max Quantity
+          <input type="number" name="max_quantity" required>
+        </label>
+        <button type="submit" class="btn btn-primary">Create Service</button>
+      </form>
+    </article>
+
+    <article class="panel-card">
+      <div class="section-head">
+        <div>
+          <h2>User Management</h2>
+          <p class="muted">Admin can inspect profile details, spend, payment history, signup date, last login, and active or banned status.</p>
+        </div>
+      </div>
+      <div class="admin-user-stack">
+        {% for summary in user_summaries %}
+          <div class="user-card">
+            <div>
+              <strong>{{ summary.user.username }}</strong>
+              <p>{{ summary.user.full_name }} | {{ "Admin" if summary.user.is_admin else "Customer" }}</p>
+              <p>{{ summary.user.email or "No email" }}{% if summary.user.phone %} | {{ summary.user.phone }}{% endif %}</p>
+              <p>{{ summary.user.country or "No country" }}</p>
+              <p>Signup: {{ summary.user.created_at.strftime("%Y-%m-%d %H:%M") if summary.user.created_at else "-" }}</p>
+              <p>Last login: {{ summary.user.last_login_at.strftime("%Y-%m-%d %H:%M") if summary.user.last_login_at else "Never" }}</p>
+              <p>Total orders: {{ summary.total_orders }} | Total spent: INR {{ "%.2f"|format(summary.total_spent) }}</p>
+              <div class="mini-payments">
+                {% for payment in summary.recent_payments %}
+                  <span class="mini-badge">{{ payment.original_currency }} {{ "%.2f"|format(payment.original_amount) }} - {{ payment.status }}</span>
+                {% else %}
+                  <span class="mini-badge muted-badge">No payments yet</span>
+                {% endfor %}
+              </div>
+            </div>
+            <div class="user-side">
+              <span>INR {{ "%.2f"|format(summary.user.wallet_inr) }}</span>
+              <span class="badge {% if not summary.user.is_active %}badge-danger{% endif %}">{{ "Active" if summary.user.is_active else "Banned" }}</span>
+              {% if not summary.user.is_admin %}
+                <form method="post" action="{{ url_for('toggle_user_status', user_id=summary.user.id) }}">
+                  <button type="submit" class="btn">{{ "Ban User" if summary.user.is_active else "Unban User" }}</button>
+                </form>
+              {% endif %}
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </article>
+  </section>
+
+  <section class="two-col">
+    <article class="panel-card">
+      <div class="section-head">
+        <div>
+          <h2>Services</h2>
+          <p class="muted">Toggle active status without deleting service records.</p>
+        </div>
+      </div>
+      <div class="list-stack">
+        {% for service in services %}
+          <div class="service-item">
+            <div>
+              <strong>{{ service["name"] }}</strong>
+              <p>{{ service["category"] }} | INR {{ "%.2f"|format(service["price_inr"]) }} / 1k</p>
+            </div>
+            <form method="post" action="{{ url_for('toggle_service', service_id=service['id']) }}">
+              <button type="submit" class="btn">{{ "Disable" if service["is_active"] else "Enable" }}</button>
+            </form>
+          </div>
+        {% endfor %}
+      </div>
+    </article>
+
+    <article class="panel-card">
+      <div class="section-head">
+        <div>
+          <h2>Recent Orders</h2>
+          <p class="muted">Admins can update the status for live fulfillment tracking.</p>
+        </div>
+      </div>
+      <div class="admin-order-stack">
+        {% for order in orders %}
+          <form method="post" action="{{ url_for('update_order_status', order_id=order['id']) }}" class="admin-order">
+            <div>
+              <strong>#{{ order["id"] }} {{ order["service_name"] }}</strong>
+              <p>{{ order["username"] }} | Qty {{ order["quantity"] }} | INR {{ "%.2f"|format(order["total_inr"]) }}</p>
+            </div>
+            <select name="status">
+              {% for status in ["Queued", "Processing", "Completed", "Cancelled"] %}
+                <option value="{{ status }}" {% if status == order["status"] %}selected{% endif %}>{{ status }}</option>
+              {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-primary">Save</button>
+          </form>
+        {% else %}
+          <p class="muted">No orders available yet.</p>
+        {% endfor %}
+      </div>
+    </article>
+  </section>
+
+  <section class="panel-card">
+    <div class="section-head">
+      <div>
+        <h2>Payment Orders</h2>
+        <p class="muted">Track created and verified Razorpay wallet top-ups.</p>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Provider Order</th>
+            <th>Original</th>
+            <th>INR Credit</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for payment in payment_orders %}
+            <tr>
+              <td>{{ payment.user.username }}</td>
+              <td>{{ payment.provider_order_id }}</td>
+              <td>{{ payment.original_currency }} {{ "%.2f"|format(payment.original_amount) }}</td>
+              <td>INR {{ "%.2f"|format(payment.amount_inr) }}</td>
+              <td><span class="badge">{{ payment.status }}</span></td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="5">No payment orders yet.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel-card">
+    <div class="section-head">
+      <div>
+        <h2>Provider Logs</h2>
+        <p class="muted">Recent provider API requests and failures.</p>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Action</th>
+            <th>Status</th>
+            <th>Request</th>
+            <th>Response</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in provider_logs %}
+            <tr>
+              <td>{{ log.action }}</td>
+              <td><span class="badge {% if log.status == 'error' %}badge-danger{% endif %}">{{ log.status }}</span></td>
+              <td>{{ log.request_payload }}</td>
+              <td>{{ log.response_payload }}</td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="4">No provider logs yet.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+{% endblock %}

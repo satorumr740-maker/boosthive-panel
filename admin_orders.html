@@ -1,0 +1,31 @@
+{% extends "admin_base.html" %}
+{% block title %}Admin Orders | BoostHive{% endblock %}
+{% block admin_content %}
+<section class="panel-card">
+  <div class="section-head">
+    <div>
+      <span class="eyebrow">Orders</span>
+      <h2>Recent Orders</h2>
+      <p class="muted">Admins can update the status for live fulfillment tracking.</p>
+    </div>
+  </div>
+  <div class="admin-order-stack">
+    {% for order in orders %}
+      <form method="post" action="{{ url_for('update_order_status', order_id=order['id']) }}" class="admin-order">
+        <div>
+          <strong>#{{ order["id"] }} {{ order["service_name"] }}</strong>
+          <p>{{ order["username"] }} | Qty {{ order["quantity"] }} | INR {{ "%.2f"|format(order["total_inr"]) }}</p>
+        </div>
+        <select name="status">
+          {% for status in ["Queued", "Processing", "Completed", "Cancelled"] %}
+            <option value="{{ status }}" {% if status == order["status"] %}selected{% endif %}>{{ status }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </form>
+    {% else %}
+      <p class="muted">No orders available yet.</p>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

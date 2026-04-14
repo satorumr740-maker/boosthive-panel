@@ -1,0 +1,151 @@
+{% extends "customer_base.html" %}
+{% block title %}Funds | BoostHive{% endblock %}
+{% block customer_content %}
+<section class="panel-card">
+  <div class="section-head">
+    <div>
+      <span class="eyebrow">Funds</span>
+      <h2>Add Funds</h2>
+      <p class="muted">Wallet top-up ab manual UPI + admin approval mode pe hai.</p>
+    </div>
+  </div>
+  <div class="note-box">
+    Step 1: UPI/QR se pay karo.<br>
+    Step 2: Neeche reference submit karo.<br>
+    Step 3: Admin approve karega, phir wallet credit hoga.
+  </div>
+</section>
+
+<section class="section-grid">
+  <article class="panel-card">
+    <div class="section-head">
+      <div>
+        <h2>Manual UPI Payment</h2>
+        <p class="muted">Pay using UPI/QR and submit request. Wallet will be credited only after admin approval.</p>
+      </div>
+    </div>
+    <div class="note-box">
+      UPI ID:
+      <strong>{{ manual_payment_config.upi_id if manual_payment_config.upi_id else "Not configured yet" }}</strong><br>
+      {{ manual_payment_config.note if manual_payment_config.note else "Add your UTR/reference after payment." }}
+    </div>
+    {% if manual_payment_config.qr_image_url %}
+      <div class="qr-box">
+        <img src="{{ manual_payment_config.qr_image_url }}" alt="UPI QR" class="qr-image">
+      </div>
+    {% endif %}
+    <form method="post" action="{{ url_for('create_manual_topup_request') }}" class="grid-form">
+      <label>Paid Amount
+        <input type="number" step="0.01" min="1" name="amount" required>
+      </label>
+      <label>Currency
+        <select name="currency">
+          {% for code in display_currencies.keys() %}
+            <option value="{{ code }}" {% if code == preferred_currency %}selected{% endif %}>{{ code }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>UTR / Reference
+        <input type="text" name="utr_or_ref" placeholder="UPI reference number">
+      </label>
+      <label>Screenshot URL (optional)
+        <input type="url" name="screenshot_url" placeholder="https://...">
+      </label>
+      <label class="wide-label">Note
+        <input type="text" name="note" placeholder="Any payment detail">
+      </label>
+      <button type="submit" class="btn btn-primary">Submit For Approval</button>
+    </form>
+  </article>
+
+  <article class="panel-card">
+    <div class="section-head">
+      <div>
+        <h2>Manual Requests</h2>
+        <p class="muted">Track your pending and reviewed requests.</p>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Amount</th>
+            <th>Reference</th>
+            <th>Status</th>
+            <th>Admin Note</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for req in manual_topup_requests %}
+            <tr>
+              <td>{{ req.original_currency }} {{ "%.2f"|format(req.original_amount) }}</td>
+              <td>{{ req.utr_or_ref or "-" }}</td>
+              <td><span class="badge {% if req.status == 'rejected' %}badge-danger{% endif %}">{{ req.status }}</span></td>
+              <td>{{ req.admin_note or "-" }}</td>
+            </tr>
+          {% else %}
+            <tr><td colspan="4">No manual requests yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+</section>
+
+<section class="section-grid">
+  <article class="panel-card">
+    <div class="section-head">
+      <div>
+        <h2>Payment Attempts</h2>
+        <p class="muted">Track funding attempts and their status.</p>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Provider Order</th>
+            <th>Original Amount</th>
+            <th>Wallet Credit</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for payment in pending_topups %}
+            <tr>
+              <td>{{ payment.provider_order_id }}</td>
+              <td>{{ payment.original_currency }} {{ "%.2f"|format(payment.original_amount) }}</td>
+              <td>{{ format_money(convert_inr(payment.amount_inr, preferred_currency), preferred_currency) }}</td>
+              <td><span class="badge">{{ payment.status }}</span></td>
+            </tr>
+          {% else %}
+            <tr><td colspan="4">No payment attempts yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+
+  <article class="panel-card">
+    <div class="section-head">
+      <div>
+        <h2>Wallet Activity</h2>
+        <p class="muted">Latest credits shown in your selected display currency.</p>
+      </div>
+    </div>
+    <div class="list-stack">
+      {% for tx in transactions %}
+        <div class="list-item">
+          <div>
+            <strong>{{ tx["payment_method"] }}</strong>
+            <p>{{ tx["original_currency"] }} {{ "%.2f"|format(tx["original_amount"]) }} added</p>
+          </div>
+          <span>{{ format_money(convert_inr(tx["amount_inr"], preferred_currency), preferred_currency) }}</span>
+        </div>
+      {% else %}
+        <p class="muted">No wallet activity yet.</p>
+      {% endfor %}
+    </div>
+  </article>
+</section>
+{% endblock %}

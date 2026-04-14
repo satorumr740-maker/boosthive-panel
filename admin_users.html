@@ -1,0 +1,44 @@
+{% extends "admin_base.html" %}
+{% block title %}Admin Users | BoostHive{% endblock %}
+{% block admin_content %}
+<section class="panel-card">
+  <div class="section-head">
+    <div>
+      <span class="eyebrow">Users</span>
+      <h2>User Management</h2>
+      <p class="muted">Profile details, spend, payment history, signup date, last login, and active or banned status.</p>
+    </div>
+  </div>
+  <div class="admin-user-stack">
+    {% for summary in user_summaries %}
+      <div class="user-card">
+        <div>
+          <strong>{{ summary.user.username }}</strong>
+          <p>{{ summary.user.full_name }} | {{ "Admin" if summary.user.is_admin else "Customer" }}</p>
+          <p>{{ summary.user.email or "No email" }}{% if summary.user.phone %} | {{ summary.user.phone }}{% endif %}</p>
+          <p>{{ summary.user.country or "No country" }}</p>
+          <p>Signup: {{ summary.user.created_at.strftime("%Y-%m-%d %H:%M") if summary.user.created_at else "-" }}</p>
+          <p>Last login: {{ summary.user.last_login_at.strftime("%Y-%m-%d %H:%M") if summary.user.last_login_at else "Never" }}</p>
+          <p>Total orders: {{ summary.total_orders }} | Total spent: INR {{ "%.2f"|format(summary.total_spent) }}</p>
+          <div class="mini-payments">
+            {% for payment in summary.recent_payments %}
+              <span class="mini-badge">{{ payment.original_currency }} {{ "%.2f"|format(payment.original_amount) }} - {{ payment.status }}</span>
+            {% else %}
+              <span class="mini-badge muted-badge">No payments yet</span>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="user-side">
+          <span>INR {{ "%.2f"|format(summary.user.wallet_inr) }}</span>
+          <span class="badge {% if not summary.user.is_active %}badge-danger{% endif %}">{{ "Active" if summary.user.is_active else "Banned" }}</span>
+          {% if not summary.user.is_admin %}
+            <form method="post" action="{{ url_for('toggle_user_status', user_id=summary.user.id) }}">
+              <button type="submit" class="btn">{{ "Ban User" if summary.user.is_active else "Unban User" }}</button>
+            </form>
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}BoostHive Panel{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="topbar">
+      <div>
+        <a class="brand" href="{{ url_for('dashboard') if current_user else url_for('login') }}">BoostHive Panel</a>
+        <p class="topline">Fast vibes, clean flow, admin power in the back</p>
+      </div>
+      {% if current_user %}
+        <nav class="top-actions">
+          <a href="{{ url_for('dashboard') }}">Dashboard</a>
+          {% if current_user["is_admin"] %}
+            <a href="{{ url_for('admin') }}">Admin</a>
+          {% endif %}
+          <a href="{{ url_for('logout') }}">Logout</a>
+        </nav>
+      {% endif %}
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-stack">
+          {% for category, message in messages %}
+            <div class="flash {{ category }}">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </div>
+</body>
+</html>

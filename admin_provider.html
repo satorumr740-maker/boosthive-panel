@@ -1,0 +1,74 @@
+{% extends "admin_base.html" %}
+{% block title %}Admin Provider | BoostHive{% endblock %}
+{% block admin_content %}
+<section class="panel-card">
+  <div class="section-head">
+    <div>
+      <span class="eyebrow">Provider</span>
+      <h2>Provider API</h2>
+      <p class="muted">Use this page for provider balance checks, service sync, and API logs.</p>
+    </div>
+  </div>
+  <div class="provider-tools">
+    <div class="note-box">
+      Status: <strong>{{ "Configured" if provider_api_enabled else "Missing API URL or key" }}</strong><br>
+      Balance:
+      <strong>
+        {% if provider_balance %}
+          {{ provider_balance.balance if provider_balance.balance is defined else provider_balance.raw if provider_balance.raw is defined else provider_balance }}
+        {% else %}
+          -
+        {% endif %}
+      </strong>
+    </div>
+    <div class="provider-actions">
+      <form method="post" action="{{ url_for('test_provider_route', action='balance') }}">
+        <button type="submit" class="btn">Test Balance</button>
+      </form>
+      <form method="post" action="{{ url_for('test_provider_route', action='services') }}">
+        <button type="submit" class="btn">Test Services</button>
+      </form>
+      <form method="post" action="{{ url_for('sync_provider_services') }}">
+        <button type="submit" class="btn btn-primary">Sync Provider Services</button>
+      </form>
+    </div>
+  </div>
+  <div class="note-box">
+    If this provider is behind Cloudflare or bot protection, local tests may fail even with the correct key.
+    The most reliable check is from the deployed Render app using your env vars.
+  </div>
+</section>
+
+<section class="panel-card">
+  <div class="section-head">
+    <div>
+      <h2>Provider Logs</h2>
+      <p class="muted">Recent provider API requests and failures.</p>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Action</th>
+          <th>Status</th>
+          <th>Request</th>
+          <th>Response</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in provider_logs %}
+          <tr>
+            <td>{{ log.action }}</td>
+            <td><span class="badge {% if log.status == 'error' %}badge-danger{% endif %}">{{ log.status }}</span></td>
+            <td>{{ log.request_payload }}</td>
+            <td>{{ log.response_payload }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="4">No provider logs yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

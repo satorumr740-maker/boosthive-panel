@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Register | BoostHive{% endblock %}
+{% block content %}
+<main class="auth-wrap">
+  <section class="auth-card">
+    <div>
+      <span class="eyebrow">Register</span>
+      <h1>Create your space and start selling smarter.</h1>
+      <p class="muted">Pick your display currency. Internal wallet accounting still stays in INR.</p>
+    </div>
+    <form method="post" class="auth-form">
+      <label>Full Name
+        <input type="text" name="full_name" required>
+      </label>
+      <label>Username
+        <input type="text" name="username" required>
+      </label>
+      <label>Email
+        <input type="email" name="email" required>
+      </label>
+      <label>Phone Number
+        <input type="text" name="phone" placeholder="+91 98765 43210">
+      </label>
+      <label>Country
+        <input type="text" name="country" placeholder="India">
+      </label>
+      <label>Password
+        <input type="password" name="password" required>
+      </label>
+      <label>Preferred Currency
+        <select name="preferred_currency">
+          {% for code in display_currencies.keys() %}
+            <option value="{{ code }}">{{ code }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <button type="submit" class="btn btn-primary">Create Account</button>
+    </form>
+    <p class="muted">Already registered? <a href="{{ url_for('login') }}">Login here</a></p>
+  </section>
+</main>
+{% endblock %}

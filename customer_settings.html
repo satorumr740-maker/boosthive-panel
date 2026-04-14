@@ -1,0 +1,27 @@
+{% extends "customer_base.html" %}
+{% block title %}Settings | BoostHive{% endblock %}
+{% block customer_content %}
+<section class="panel-card">
+  <div class="section-head">
+    <div>
+      <span class="eyebrow">Settings</span>
+      <h2>Display Preferences</h2>
+      <p class="muted">Settings page keeps personal preferences separate from action pages.</p>
+    </div>
+  </div>
+  <form method="post" action="{{ url_for('update_currency') }}" class="grid-form single">
+    <label>Preferred Currency
+      <select name="preferred_currency">
+        {% for code in display_currencies.keys() %}
+          <option value="{{ code }}" {% if code == preferred_currency %}selected{% endif %}>{{ code }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit" class="btn">Update Display Currency</button>
+  </form>
+  <div class="note-box">
+    Base accounting currency: <strong>INR</strong><br>
+    Display currencies: <strong>{{ display_currencies.keys() | join(", ") }}</strong>
+  </div>
+</section>
+{% endblock %}

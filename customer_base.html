@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block content %}
+<main class="customer-shell">
+  <aside class="customer-sidebar">
+    <div class="sidebar-card">
+      <span class="eyebrow">Panel Menu</span>
+      <h2>{{ current_user.full_name }}</h2>
+      <p class="muted">Use the left menu to open each section separately.</p>
+    </div>
+    <nav class="customer-nav">
+      <a href="{{ url_for('customer_overview') }}" class="{% if request.endpoint == 'customer_overview' %}active{% endif %}"><span class="nav-icon">OV</span><span>Overview</span></a>
+      <a href="{{ url_for('customer_orders') }}" class="{% if request.endpoint == 'customer_orders' %}active{% endif %}"><span class="nav-icon">OR</span><span>Orders</span></a>
+      <a href="{{ url_for('customer_funds') }}" class="{% if request.endpoint == 'customer_funds' %}active{% endif %}"><span class="nav-icon">FD</span><span>Funds</span></a>
+      <a href="{{ url_for('customer_support') }}" class="{% if request.endpoint == 'customer_support' %}active{% endif %}"><span class="nav-icon">SP</span><span>Support</span></a>
+      <a href="{{ url_for('customer_settings') }}" class="{% if request.endpoint == 'customer_settings' %}active{% endif %}"><span class="nav-icon">ST</span><span>Settings</span></a>
+      {% if current_user.is_admin %}
+        <a href="{{ url_for('admin') }}"><span class="nav-icon">AD</span><span>Admin</span></a>
+      {% endif %}
+    </nav>
+  </aside>
+
+  <section class="customer-content">
+    {% block customer_content %}{% endblock %}
+  </section>
+</main>
+{% endblock %}

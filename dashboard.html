@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+{% block title %}Dashboard | BoostHive{% endblock %}
+{% block content %}
+<main class="dashboard-page">
+  <section class="hero-card">
+    <div>
+      <span class="eyebrow">Customer Dashboard</span>
+      <h1>{{ current_user["full_name"] }}</h1>
+      <p class="muted wide">Everything the user needs is right here: wallet, live services, order flow, and order updates. No messy extra stuff.</p>
+      <p class="muted">{{ current_user.email or "No email set" }}{% if current_user.phone %} | {{ current_user.phone }}{% endif %}{% if current_user.country %} | {{ current_user.country }}{% endif %}</p>
+    </div>
+    <div class="hero-grid">
+      <article class="metric-card">
+        <small>Available Balance</small>
+        <strong>{{ format_money(convert_inr(current_user["wallet_inr"], preferred_currency), preferred_currency) }}</strong>
+      </article>
+      <article class="metric-card">
+        <small>Total Orders</small>
+        <strong>{{ total_orders }}</strong>
+      </article>
+      <article class="metric-card">
+        <small>Pending Orders</small>
+        <strong>{{ pending_orders }}</strong>
+      </article>
+    </div>
+  </section>
+
+  <section class="section-grid">
+    <article class="panel-card">
+      <div class="section-head">
+        <div>
+          <h2>Add Funds</h2>
+          <p class="muted">Wallet top-up area. Use Razorpay later or manual credit while you’re testing.</p>
+        </div>
+      </div>
+      <form method="post" action="{{ url_for('create_wallet_checkout') }}" class="grid-form">
+        <label>Amount
+          <input type="number" step="0.01" min="1" name="amount" required>
+        </label>
+        <label>Currency
+          <select name="currency">
+            {% for code in display_currencies.keys() %}
+              <option value="{{ code }}" {% if code == preferred_currency %}selected{% endif %}>{{ code }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>Method
+          <select name="payment_method">
+            <option>UPI</option>
+            <option>Card</option>
+            <option>Netbanking</option>
+            <option>Wallet</option>
+          </select>
+        </label>
+        <label>Reference Note
+          <input type="text" name="reference_note" placeholder="FamApp UPI / manual test / Razorpay later">
+        </label>
+        <button type="submit" class="btn btn-primary">Pay with Razorpay</button>
+      </form>
+      <form method="post" action="{{ url_for('add_funds_manual') }}" class="inline-form">
+        <input type="hidden" name="amount" value="100">
+        <input type="hidden" name="currency" value="{{ preferred_currency }}">
+        <input type="hidden" name="payment_method" value="Manual Test">
+        <input type="hidden" name="reference_note" value="Local testing credit">
+        <button type="submit" class="btn">Quick Test Credit</button>
+      </form>
+      {% if not razorpay_enabled %}
+        <div class="note-box">
+          Razorpay is currently disabled because `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` are not set.
+        </div>
+      {% endif %}
+    </article>
+
+    <article class="panel-card">
+      <div class="section-head">
+        <div>
+          <h2>Support</h2>
+          <p class="muted">Keep support, refill help, and contact info in a dedicated section.</p>
+        </div>
+      </div>
+      <div class="note-box">
+        Ticket response target: <strong>24/7</strong><br>
+        Refill policy: <strong>Shown per service</strong><br>
+        Contact route: <strong>Admin panel or order detail flow</strong>
+      </div>
+      <div class="note-box">
+        Best setup:
+        <strong>users request support by order ID</strong><br>
+        <strong>admin handles update from backend</strong>
+      </div>
+    </article>
+  </section>
+
+  <section class="section-grid">
+    <article class="panel-card">
+      <div class="section-head">
+        <div>
+          <h2>Orders</h2>
+          <p class="muted">Simple customer-side order flow with active services only.</p>
+        </div>
+      </div>
+      <form method="post" action="{{ url_for('create_order') }}" class="grid-form">
+        <label class="wide-label">Service
+          <select name="service_id">
+            {% for service in services %}
+              <option value="{{ service['id'] }}">
+                {{ service["category"] }} | {{ service["name"] }} | {{ format_money(convert_inr(service["price_inr"], preferred_currency), preferred_currency) }} / 1k
+              </option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>Quantity
+          <input type="number" name="quantity" min="1" value="1000" required>
+        </label>
+        <label>Target Link
+          <input type="url" name="target_link" placeholder="https://instagram.com/yourprofile" required>
+        </label>
+        <label class="wide-label">Notes
+          <textarea name="note" placeholder="Optional order note"></textarea>
+        </label>
+        <button type="submit" class="btn btn-primary">Place Order</button>
+      </form>
+    </article>
+
+    <article class="panel-card">
+      <div class="section-head">
+        <div>
+          <h2>Payment Attempts</h2>
+          <p class="muted">Track wallet funding attempts and their current state in one place.</p>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Provider Order</th>
+              <th>Original Amount</th>
+              <th>INR Credit</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for payment in pending_topups %}
+              <tr>
+                <td>{{ payment.provider_order_id }}</td>
+                <td>{{ payment.original_currency }} {{ "%.2f"|format(payment.original_amount) }}</td>
+                <td>INR {{ "%.2f"|format(payment.amount_inr) }}</td>
+                <td><span class="badge">{{ payment.status }}</span></td>
+              </tr>
+            {% else %}
+              <tr>
+                <td colspan="4">No payment attempts yet.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </article>
+  </section>
+
+  <section class="section-grid">
+    <article class="panel-card">
+      <div class="section-head">
+        <div>
+          <h2>Wallet Activity</h2>
+          <p class="muted">Latest top-ups with original currency and converted INR value.</p>
+        </div>
+      </div>
+      <div class="list-stack">
+        {% for tx in transactions %}
+          <div class="list-item">
+            <div>
+              <strong>{{ tx["payment_method"] }}</strong>
+              <p>{{ tx["original_currency"] }} {{ "%.2f"|format(tx["original_amount"]) }} added</p>
+            </div>
+            <span>INR {{ "%.2f"|format(tx["amount_inr"]) }}</span>
+          </div>
+        {% else %}
+          <p class="muted">No wallet activity yet.</p>
+        {% endfor %}
+      </div>
+    </article>
+
+    <article class="panel-card">
+      <div class="section-head">
+        <div>
+          <h2>Settings</h2>
+          <p class="muted">Personal display and currency preferences stay separate from funds and orders.</p>
+        </div>
+      </div>
+      <form method="post" action="{{ url_for('update_currency') }}" class="grid-form single">
+        <label>Preferred Currency
+          <select name="preferred_currency">
+            {% for code in display_currencies.keys() %}
+              <option value="{{ code }}" {% if code == preferred_currency %}selected{% endif %}>{{ code }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <button type="submit" class="btn">Update Display Currency</button>
+      </form>
+      <div class="note-box">
+        Base accounting currency: <strong>INR</strong><br>
+        Display currencies: <strong>{{ display_currencies.keys() | join(", ") }}</strong>
+      </div>
+    </article>
+  </section>
+
+  <section class="panel-card">
+    <div class="section-head">
+      <div>
+        <h2>Recent Orders</h2>
+        <p class="muted">Full order list stays in its own section so it’s easier to scan.</p>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Service</th>
+            <th>Category</th>
+            <th>Qty</th>
+            <th>Total</th>
+            <th>Status</th>
+            <th>Created</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for order in orders %}
+            <tr>
+              <td>{{ order["service_name"] }}</td>
+              <td>{{ order["category"] }}</td>
+              <td>{{ order["quantity"] }}</td>
+              <td>{{ format_money(convert_inr(order["total_inr"], preferred_currency), preferred_currency) }}</td>
+              <td><span class="badge">{{ order["status"] }}</span></td>
+              <td>{{ order["created_at"][:16].replace("T", " ") }}</td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="6">No orders yet.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+{% endblock %}

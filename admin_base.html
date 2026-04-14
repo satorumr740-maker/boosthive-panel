@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<main class="customer-shell">
+  <aside class="customer-sidebar">
+    <div class="sidebar-card">
+      <span class="eyebrow">Admin Menu</span>
+      <h2>Control Center</h2>
+      <p class="muted">Open users, services, payments, provider tools, and orders separately.</p>
+    </div>
+    <nav class="customer-nav">
+      <a href="{{ url_for('admin_overview') }}" class="{% if request.endpoint == 'admin_overview' %}active{% endif %}"><span class="nav-icon">OV</span><span>Overview</span></a>
+      <a href="{{ url_for('admin_users') }}" class="{% if request.endpoint == 'admin_users' %}active{% endif %}"><span class="nav-icon">US</span><span>Users</span></a>
+      <a href="{{ url_for('admin_services') }}" class="{% if request.endpoint == 'admin_services' %}active{% endif %}"><span class="nav-icon">SV</span><span>Services</span></a>
+      <a href="{{ url_for('admin_payments') }}" class="{% if request.endpoint == 'admin_payments' %}active{% endif %}"><span class="nav-icon">PY</span><span>Payments</span></a>
+      <a href="{{ url_for('admin_provider') }}" class="{% if request.endpoint == 'admin_provider' %}active{% endif %}"><span class="nav-icon">AP</span><span>Provider</span></a>
+      <a href="{{ url_for('admin_orders') }}" class="{% if request.endpoint == 'admin_orders' %}active{% endif %}"><span class="nav-icon">OD</span><span>Orders</span></a>
+      <a href="{{ url_for('customer_overview') }}"><span class="nav-icon">UP</span><span>User Panel</span></a>
+    </nav>
+  </aside>
+
+  <section class="customer-content">
+    {% block admin_content %}{% endblock %}
+  </section>
+</main>
+{% endblock %}

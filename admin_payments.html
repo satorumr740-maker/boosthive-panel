@@ -1,0 +1,114 @@
+{% extends "admin_base.html" %}
+{% block title %}Admin Payments | BoostHive{% endblock %}
+{% block admin_content %}
+<section class="panel-card">
+  <div class="section-head">
+    <div>
+      <span class="eyebrow">Manual UPI Setup</span>
+      <h2>UPI + QR Configuration</h2>
+      <p class="muted">Set your own UPI ID and QR so users can pay manually and submit approval requests.</p>
+    </div>
+  </div>
+  <form method="post" action="{{ url_for('update_manual_payment_config') }}" class="grid-form">
+    <label>UPI ID
+      <input type="text" name="upi_id" value="{{ manual_payment_config.upi_id or '' }}" placeholder="yourname@upi">
+    </label>
+    <label>QR Image URL
+      <input type="url" name="qr_image_url" value="{{ manual_payment_config.qr_image_url or '' }}" placeholder="https://.../qr.png">
+    </label>
+    <label class="wide-label">Note for Users
+      <input type="text" name="note" value="{{ manual_payment_config.note or '' }}" placeholder="Pay and share UTR for approval">
+    </label>
+    <button type="submit" class="btn btn-primary">Save Manual Payment Setup</button>
+  </form>
+</section>
+
+<section class="panel-card">
+  <div class="section-head">
+    <div>
+      <span class="eyebrow">Manual Requests</span>
+      <h2>Approve / Reject Requests</h2>
+      <p class="muted">Approve to credit wallet. Reject to decline invalid payment proofs.</p>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>User</th>
+          <th>Paid Amount</th>
+          <th>Reference</th>
+          <th>Proof</th>
+          <th>Status</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for req in manual_topup_requests %}
+          <tr>
+            <td>{{ req.user.username }}</td>
+            <td>{{ req.original_currency }} {{ "%.2f"|format(req.original_amount) }}</td>
+            <td>{{ req.utr_or_ref or "-" }}</td>
+            <td>{% if req.screenshot_url %}<a href="{{ req.screenshot_url }}" target="_blank">Open</a>{% else %}-{% endif %}</td>
+            <td><span class="badge {% if req.status == 'rejected' %}badge-danger{% endif %}">{{ req.status }}</span></td>
+            <td>
+              {% if req.status == 'pending' %}
+                <div class="manual-actions">
+                  <form method="post" action="{{ url_for('approve_manual_topup', request_id=req.id) }}">
+                    <input type="text" name="admin_note" placeholder="Approve note">
+                    <button type="submit" class="btn btn-primary">Approve</button>
+                  </form>
+                  <form method="post" action="{{ url_for('reject_manual_topup', request_id=req.id) }}">
+                    <input type="text" name="admin_note" placeholder="Reject reason">
+                    <button type="submit" class="btn">Reject</button>
+                  </form>
+                </div>
+              {% else %}
+                {{ req.admin_note or "-" }}
+              {% endif %}
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="6">No manual requests yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="panel-card">
+  <div class="section-head">
+    <div>
+      <span class="eyebrow">Payments</span>
+      <h2>Payment Orders</h2>
+      <p class="muted">Track created and verified wallet top-ups.</p>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>User</th>
+          <th>Provider Order</th>
+          <th>Original</th>
+          <th>INR Credit</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for payment in payment_orders %}
+          <tr>
+            <td>{{ payment.user.username }}</td>
+            <td>{{ payment.provider_order_id }}</td>
+            <td>{{ payment.original_currency }} {{ "%.2f"|format(payment.original_amount) }}</td>
+            <td>INR {{ "%.2f"|format(payment.amount_inr) }}</td>
+            <td><span class="badge">{{ payment.status }}</span></td>
+          </tr>
+        {% else %}
+          <tr><td colspan="5">No payment orders yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Checkout | BoostHive{% endblock %}
+{% block content %}
+<main class="auth-wrap">
+  <section class="auth-card">
+    <div>
+      <span class="eyebrow">Razorpay Checkout</span>
+      <h1>Complete your wallet top-up</h1>
+      <p class="muted">Order {{ razorpay_order["id"] }} for {{ payment_order.original_currency }} {{ "%.2f"|format(payment_order.original_amount) }}</p>
+    </div>
+    <button id="pay-now" class="btn btn-primary">Open Razorpay Checkout</button>
+    <p class="muted">After successful payment, Razorpay posts back to the callback route and credits the wallet after signature verification.</p>
+  </section>
+</main>
+
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script>
+  const options = {
+    key: "{{ razorpay_key_id }}",
+    amount: "{{ razorpay_order['amount'] }}",
+    currency: "{{ razorpay_order['currency'] }}",
+    name: "BoostHive Panel",
+    description: "Wallet top-up",
+    order_id: "{{ razorpay_order['id'] }}",
+    callback_url: "{{ callback_url }}",
+    prefill: {
+      name: "{{ current_user.full_name }}",
+      email: "",
+      contact: ""
+    },
+    theme: {
+      color: "#ffb44d"
+    }
+  };
+
+  const checkout = new Razorpay(options);
+  document.getElementById("pay-now").addEventListener("click", function () {
+    checkout.open();
+  });
+  setTimeout(function () {
+    checkout.open();
+  }, 150);
+</script>
+{% endblock %}
