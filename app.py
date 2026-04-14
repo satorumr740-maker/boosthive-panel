@@ -237,7 +237,24 @@ def default_avg_start(category: str | None = None, rate: float | None = None) ->
 
 
 def create_app() -> Flask:
-    app = Flask(__name__, template_folder=".", static_folder=".", static_url_path="/static")
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    template_dir = os.path.join(base_dir, "templates")
+    static_dir = os.path.join(base_dir, "static")
+
+    # Support both layouts:
+    # 1) standard Flask folders: templates/, static/
+    # 2) flat root files in repository root
+    if not os.path.isdir(template_dir):
+        template_dir = base_dir
+    if not os.path.isdir(static_dir):
+        static_dir = base_dir
+
+    app = Flask(
+        __name__,
+        template_folder=template_dir,
+        static_folder=static_dir,
+        static_url_path="/static",
+    )
     database_url = os.environ.get("DATABASE_URL", "sqlite:///panel.db")
     if database_url.startswith("postgres://"):
         database_url = database_url.replace("postgres://", "postgresql://", 1)
@@ -430,19 +447,45 @@ def create_app() -> Flask:
                 service.avg_start = default_avg_start(service.category, service.base_price_inr)
         db.session.commit()
 
-        if not User.query.filter_by(username="admin").first():
+        configured_admin_username = (os.environ.get("ADMIN_USERNAME", "admin") or "admin").strip().lower()
+        configured_admin_password = os.environ.get("ADMIN_PASSWORD", "admin123")
+        configured_admin_full_name = (os.environ.get("ADMIN_FULL_NAME", "Panel Admin") or "Panel Admin").strip()
+        configured_admin_email = (os.environ.get("ADMIN_EMAIL", "admin@boosthive.local") or "admin@boosthive.local").strip().lower()
+
+        admin_user = User.query.filter_by(is_admin=True).order_by(User.id.asc()).first()
+        if admin_user is None:
             db.session.add(
                 User(
-                    username="admin",
-                    full_name="Panel Admin",
-                    email="admin@boosthive.local",
+                    username=configured_admin_username,
+                    full_name=configured_admin_full_name,
+                    email=configured_admin_email,
                     phone="+91 99999 00000",
                     country="India",
-                    password_hash=generate_password_hash("admin123"),
+                    password_hash=generate_password_hash(configured_admin_password),
                     is_admin=True,
                     preferred_currency="INR",
                 )
             )
+        else:
+            admin_user.is_admin = True
+            if os.environ.get("ADMIN_USERNAME"):
+                username_conflict = User.query.filter(
+                    User.username == configured_admin_username,
+                    User.id != admin_user.id,
+                ).first()
+                if username_conflict is None:
+                    admin_user.username = configured_admin_username
+            if os.environ.get("ADMIN_FULL_NAME"):
+                admin_user.full_name = configured_admin_full_name
+            if os.environ.get("ADMIN_EMAIL"):
+                email_conflict = User.query.filter(
+                    User.email == configured_admin_email,
+                    User.id != admin_user.id,
+                ).first()
+                if email_conflict is None:
+                    admin_user.email = configured_admin_email
+            if os.environ.get("ADMIN_PASSWORD"):
+                admin_user.password_hash = generate_password_hash(configured_admin_password)
 
         if not User.query.filter_by(username="demo").first():
             db.session.add(
