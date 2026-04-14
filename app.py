@@ -479,6 +479,50 @@ def create_app() -> Flask:
             log_provider_failure(action, payload, str(exc))
             return False, str(exc)
 
+    def provider_debug_snapshot() -> dict:
+        api_url = app.config["SMM_API_URL"]
+        api_key = app.config["SMM_API_KEY"]
+        key_preview = ""
+        if api_key:
+            if len(api_key) <= 8:
+                key_preview = "*" * len(api_key)
+            else:
+                key_preview = f"{api_key[:4]}...{api_key[-4:]}"
+
+        snapshot: dict[str, object] = {
+            "configured": has_provider_api(),
+            "api_url": api_url,
+            "api_key_length": len(api_key or ""),
+            "api_key_preview": key_preview,
+            "tests": {},
+        }
+
+        for action in ("services", "balance"):
+            payload = {"key": api_key, "action": action}
+            try:
+                response = requests.post(
+                    api_url,
+                    data=payload,
+                    headers=PROVIDER_HEADERS,
+                    timeout=45,
+                )
+                sample = response.text[:400]
+                entry = {
+                    "http_status": response.status_code,
+                    "ok": response.ok,
+                    "body_sample": sample,
+                }
+                if response.ok:
+                    try:
+                        entry["json_sample"] = response.json()
+                    except ValueError:
+                        pass
+                snapshot["tests"][action] = entry
+            except Exception as exc:
+                snapshot["tests"][action] = {"error": str(exc)}
+
+        return snapshot
+
     def login_required(view):
         @wraps(view)
         def wrapped_view(**kwargs):
@@ -1325,6 +1369,12 @@ def create_app() -> Flask:
     @admin_required
     def admin_provider():
         return render_template("admin_provider.html", **get_admin_context(include_provider_balance=True))
+
+    @app.route("/admin/provider/debug")
+    @login_required
+    @admin_required
+    def admin_provider_debug():
+        return jsonify(provider_debug_snapshot())
 
     @app.route("/admin/orders")
     @login_required

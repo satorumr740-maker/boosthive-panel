@@ -611,7 +611,8 @@ th {
 }
 
 @media (max-width: 1180px) {
-  .hero-grid {
+  .hero-grid,
+  .section-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -670,7 +671,8 @@ th {
 
   .hero-grid,
   .two-col,
-  .grid-form {
+  .grid-form,
+  .section-grid {
     grid-template-columns: 1fr;
   }
 
@@ -702,6 +704,12 @@ th {
 
   .manual-actions form > * {
     flex: 1 1 100%;
+  }
+
+  .qr-image {
+    width: min(240px, 100%);
+    margin: 0 auto;
+    display: block;
   }
 
   .user-side {
@@ -792,5 +800,9 @@ th {
   .sidebar-card,
   .auth-card {
     padding: 16px;
+  }
+
+  .section-grid {
+    gap: 14px;
   }
 }
